@@ -14,7 +14,9 @@ const hashRefreshToken = (token) =>
 const issueRefreshToken = async (userId) => {
   const token = crypto.randomBytes(64).toString("hex");
   const tokenHash = hashRefreshToken(token);
-  const expiresAt = new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(
+    Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000
+  );
   await refreshTokenModel.insert(userId, tokenHash, expiresAt);
   return { token, expiresAt };
 };
@@ -35,10 +37,14 @@ const revokeRefresh = async (token) => {
   await refreshTokenModel.revokeByHash(hashRefreshToken(token));
 };
 
+// In production (Vercel frontend + Render backend = different domains) the
+// refresh cookie has to be SameSite=None + Secure for the browser to send it
+// on cross-site requests. Locally we keep SameSite=Lax so it still works on
+// http://localhost without HTTPS.
 const refreshCookieOptions = () => ({
   httpOnly: true,
-  secure: env.cookieSecure,
-  sameSite: "lax",
+  secure: env.isProd ? true : env.cookieSecure,
+  sameSite: env.isProd ? "none" : "lax",
   path: "/api/auth",
   maxAge: env.refreshTokenTtlDays * 24 * 60 * 60 * 1000,
 });

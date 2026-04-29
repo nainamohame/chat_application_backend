@@ -12,7 +12,11 @@ const conversationRoom = (id) => `conversation:${id}`;
 
 const initSocket = (httpServer) => {
     io = new Server(httpServer, {
-        cors: { origin: env.clientOrigin, credentials: true },
+        cors: {
+            origin: env.clientOrigin,
+            methods: ["GET", "POST"],
+            credentials: true,
+        },
     });
 
     io.use((socket, next) => {
