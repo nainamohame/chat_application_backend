@@ -14,7 +14,7 @@ const hashRefreshToken = (token) =>
 const issueRefreshToken = async (userId) => {
   const token = crypto.randomBytes(64).toString("hex");
   const tokenHash = hashRefreshToken(token);
-  const expiresAt = new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1);
+  const expiresAt = new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000);
   await refreshTokenModel.insert(userId, tokenHash, expiresAt);
   return { token, expiresAt };
 };
