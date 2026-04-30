@@ -8,9 +8,19 @@ const getTransporter = () => {
     if (!env.smtp.user || !env.smtp.pass) return null;
     transporter = nodemailer.createTransport({
         host: env.smtp.host,
-        port: env.smtp.port,
+        port: Number(env.smtp.port),
         secure: env.smtp.port === 465,
-        auth: { user: env.smtp.user, pass: env.smtp.pass },
+        family: 4,
+        auth: {
+            user: env.smtp.user,
+            pass: env.smtp.pass,
+        },
+        connectionTimeout: 30000,
+        greetingTimeout: 30000,
+        socketTimeout: 30000,
+        tls: {
+            rejectUnauthorized: false,
+        },
     });
     return transporter;
 };
@@ -37,7 +47,14 @@ const sendOtp = async (email, code) => {
         });
         console.log(`[email] OTP sent to ${email}`);
     } catch (err) {
-        console.error(`[email] failed to send OTP to ${email}:`, err.message);
+        console.error("[email] failed to send OTP", {
+            to: email,
+            host: env.smtp.host,
+            port: env.smtp.port,
+            user: env.smtp.user,
+            errCode: err.code,
+            errMessage: err.message,
+        });
         throw err;
     }
 };
