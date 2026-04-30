@@ -28,6 +28,13 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/conversations", conversationRoutes);
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Chat application backend is running successfully",
+  });
+});
+
 app.use((_req, res) => res.status(404).json({ success: false, message: "Not found" }));
 app.use(errorHandler);
 
