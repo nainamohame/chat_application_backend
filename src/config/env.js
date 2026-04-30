@@ -18,6 +18,16 @@ module.exports = {
     .filter(Boolean),
   cookieSecure: process.env.COOKIE_SECURE === "true",
   isProd: process.env.NODE_ENV === "production",
+  // Resend HTTPS API — used in production (Render blocks outbound SMTP).
+  resendApiKey: process.env.RESEND_API_KEY || "",
+  // Sender for both Resend and SMTP. For Resend testing without a verified
+  // domain, use "onboarding@resend.dev" (emails only deliver to the account
+  // owner's address). For production, verify a domain in Resend and set
+  // MAIL_FROM=YourApp <noreply@yourdomain.com>.
+  mailFrom:
+    process.env.MAIL_FROM ||
+    process.env.SMTP_FROM ||
+    "Chat App <onboarding@resend.dev>",
   smtp: {
     host: process.env.SMTP_HOST || "smtp.gmail.com",
     port: parseInt(process.env.SMTP_PORT || "587", 10),
