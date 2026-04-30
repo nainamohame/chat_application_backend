@@ -18,6 +18,9 @@ module.exports = {
     .filter(Boolean),
   cookieSecure: process.env.COOKIE_SECURE === "true",
   isProd: process.env.NODE_ENV === "production",
+  // Brevo HTTPS API — used in production when no custom domain is available
+  // (Brevo allows single-sender verification with a plain Gmail address).
+  brevoApiKey: process.env.BREVO_API_KEY || "",
   // Resend HTTPS API — used in production (Render blocks outbound SMTP).
   resendApiKey: process.env.RESEND_API_KEY || "",
   // Sender for both Resend and SMTP. For Resend testing without a verified

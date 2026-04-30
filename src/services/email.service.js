@@ -2,10 +2,11 @@ const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
 const env = require("../config/env");
 
-// Three send paths, picked in this order:
-//   1. RESEND_API_KEY set     → Resend HTTPS API  (works on Render — port 443, no SMTP block)
-//   2. SMTP_USER + SMTP_PASS  → Nodemailer SMTP   (works locally; many PaaS block SMTP egress)
-//   3. neither                → console log       (dev fallback so register still completes)
+// Send order:
+//   1. BREVO_API_KEY  → Brevo HTTPS API   (works on Render; no domain needed — uses verified Gmail sender)
+//   2. RESEND_API_KEY → Resend HTTPS API  (works on Render; needs verified domain for arbitrary recipients)
+//   3. SMTP_USER+PASS → Nodemailer SMTP   (works locally; most PaaS block SMTP egress)
+//   4. nothing        → console log       (dev fallback so register still completes)
 //
 // External signature is unchanged: sendOtp(email, code).
 
@@ -19,9 +20,6 @@ const getResend = () => {
     return resendClient;
 };
 
-// `family: 4` and the long timeouts are kept for environments where SMTP
-// IS reachable but Node's default IPv6 routing or default 10 s connection
-// timeout is the problem.
 const getSmtpTransporter = () => {
     if (smtpTransporter) return smtpTransporter;
     if (!env.smtp.user || !env.smtp.pass) return null;
@@ -39,6 +37,19 @@ const getSmtpTransporter = () => {
     return smtpTransporter;
 };
 
+// Accepts either "user@example.com" or `"Display Name <user@example.com>"`
+// and returns an object Brevo's API can consume.
+const parseFromHeader = (header) => {
+    const s = String(header || "").trim();
+    const m = s.match(/^"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
+    if (m) {
+        const name = m[1].trim();
+        const email = m[2].trim();
+        return name ? { name, email } : { email };
+    }
+    return { email: s };
+};
+
 const buildEmailContent = (code) => ({
     subject: "Your verification code",
     text: `Your verification code is ${code}. It expires in 10 minutes.`,
@@ -51,8 +62,51 @@ const buildEmailContent = (code) => ({
         </div>`,
 });
 
+const sendViaBrevo = async (to, { subject, text, html }) => {
+    const sender = parseFromHeader(env.mailFrom);
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+            "api-key": env.brevoApiKey,
+            "content-type": "application/json",
+            accept: "application/json",
+        },
+        body: JSON.stringify({
+            sender,
+            to: [{ email: to }],
+            subject,
+            htmlContent: html,
+            textContent: text,
+        }),
+    });
+    if (!res.ok) {
+        let body = "";
+        try {
+            body = JSON.stringify(await res.json());
+        } catch {
+            body = await res.text().catch(() => "");
+        }
+        throw new Error(`Brevo ${res.status}: ${body}`);
+    }
+};
+
 const sendOtp = async (email, code) => {
-    const { subject, text, html } = buildEmailContent(code);
+    const content = buildEmailContent(code);
+
+    if (env.brevoApiKey) {
+        try {
+            await sendViaBrevo(email, content);
+            console.log(`[email] OTP sent via Brevo to ${email}`);
+            return;
+        } catch (err) {
+            console.error("[email] Brevo send failed", {
+                to: email,
+                from: env.mailFrom,
+                errMessage: err.message,
+            });
+            throw err;
+        }
+    }
 
     const r = getResend();
     if (r) {
@@ -60,9 +114,9 @@ const sendOtp = async (email, code) => {
             const result = await r.emails.send({
                 from: env.mailFrom,
                 to: email,
-                subject,
-                text,
-                html,
+                subject: content.subject,
+                text: content.text,
+                html: content.html,
             });
             if (result.error) {
                 throw new Error(result.error.message || JSON.stringify(result.error));
@@ -82,7 +136,13 @@ const sendOtp = async (email, code) => {
     const t = getSmtpTransporter();
     if (t) {
         try {
-            await t.sendMail({ from: env.smtp.from, to: email, subject, text, html });
+            await t.sendMail({
+                from: env.smtp.from,
+                to: email,
+                subject: content.subject,
+                text: content.text,
+                html: content.html,
+            });
             console.log(`[email] OTP sent via SMTP to ${email}`);
             return;
         } catch (err) {
